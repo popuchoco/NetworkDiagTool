@@ -1,35 +1,38 @@
-# NetworkDiagTool
+# NetworkDiagTool Source Package
 
-Windows Forms 網路診斷工具，提供 Ping、TNC/TCP、tracert、完整診斷、ipconfig、netstat、路由表、網卡狀態、DNS 解析、地址解析與 Proxy 偵測功能。
+[English README](../README.md) | [繁體中文 README](../README_TC.md)
 
-## 使用前準備
+This directory contains the NetworkDiagTool solution and source projects. The application is a Windows Forms network diagnostic tool with Ping, TNC/TCP, tracert, full diagnostic, ipconfig, netstat, routing table, adapter status, DNS resolution, ARP lookup, and Proxy detection features.
 
-程式不會自動建立 `config.json`。請先複製 `NetworkDiagTool/config.template.json`，重新命名為同一資料夾中的 `config.json`，再啟動程式。
+## Configuration
 
-```json
+The application does not create `config.json` automatically. Before the first launch, copy `NetworkDiagTool/config.template.json` to `NetworkDiagTool/config.json`.
+
+`json
 {
   "LogDirectory": "C:\\Temp\\NetworkDiagLogs",
   "DefaultTimeoutMs": 3000,
   "DefaultPingCount": 4
 }
-```
+`
 
-- `LogDirectory`：Log 根目錄；實際路徑會依專案名稱、日期與小時分層建立。
-- `DefaultTimeoutMs`：預設 Timeout，允許 500 到 60000 毫秒。
-- `DefaultPingCount`：預設 Ping 次數；單項 Ping 允許 1 到 86400 次。
+- `LogDirectory`: root directory for diagnostic logs, organized by project, date, and hour.
+- `DefaultTimeoutMs`: default timeout from 500 to 60,000 milliseconds.
+- `DefaultPingCount`: default single-operation Ping count from 1 to 86,400.
 
-## 建置與測試
+## Build and Test
 
-```powershell
+`powershell
 dotnet build .\work\NetworkDiagTool.slnx -c Release
 dotnet run --project .\work\NetworkDiagTool.Tests\NetworkDiagTool.Tests.csproj -c Release --no-build
-```
+`
 
-測試前請先完成 `dotnet build`。若目標電腦沒有 .NET 10 Desktop Runtime，請使用 `publish-self-contained-win-x64.ps1` 建立 self-contained 發行包。
+Complete `dotnet build` before running the test command. If the target computer does not have the .NET 10 Desktop Runtime, use `publish-self-contained-win-x64.ps1` to create a self-contained package.
 
-## 限制
+## Limitations
 
-- 本工具不包含 `iperf` / `iperf3` 的上行、下載、吞吐量、jitter 或效能壓力測試。
-- 本工具無法透過 HAL API 取得 switch/router 每個 LAN Port 的 Link 狀態、協商速率及封包統計。
-- 單項 Ping 最多 86400 次；完整診斷中的 Ping 固定最多 30 次。
-- 診斷 Log 可能包含環境敏感資訊，不應提交至公開 repository。
+- The tool does not include `iperf` / `iperf3` upload, download, throughput, jitter, or performance stress testing.
+- The tool cannot use a HAL API to obtain switch/router LAN-port Link state, negotiated speed, or packet statistics.
+- A single Ping supports up to 86,400 requests; Full Diagnostic caps its Ping phase at 30 requests.
+- Diagnostic logs may contain environment-sensitive information and must not be committed to a public repository.
+
