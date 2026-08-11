@@ -25,7 +25,7 @@ NetworkDiagTool is a Windows Forms network diagnostic tool for checking IP/Host,
 
 ## Project Structure
 
-`text
+```text
 .
 ├─ README.md
 ├─ README_TC.md
@@ -47,7 +47,7 @@ NetworkDiagTool is a Windows Forms network diagnostic tool for checking IP/Host,
    └─ NetworkDiagTool.Tests/
       ├─ NetworkDiagTool.Tests.csproj
       └─ Program.cs
-`
+```
 
 `outputs/`, `tmp/`, `bin/`, `obj/`, and `work/package_*/` are generated, temporary, or historical iteration artifacts and are not part of the public source tree.
 
@@ -64,13 +64,13 @@ Diagnostic logs may contain company, device, IP, host-name, and network-topology
 
 The program does not create `config.json` automatically. Before the first launch, copy `config.template.json` and rename the copy to `config.json`.
 
-`json
+```json
 {
   "LogDirectory": "C:\\Temp\\NetworkDiagLogs",
   "DefaultTimeoutMs": 3000,
   "DefaultPingCount": 4
 }
-`
+```
 
 Field descriptions:
 
@@ -114,23 +114,23 @@ When Ping fails, Full Diagnostic also evaluates the `arp -a` result:
 
 ## Build
 
-`powershell
+```powershell
 dotnet build .\work\NetworkDiagTool.slnx -c Release
-`
+```
 
 Release output:
 
-`text
+```text
 work\NetworkDiagTool\bin\Release\net10.0-windows\NetworkDiagTool.exe
-`
+```
 
 ## Tests
 
 The test command uses `--no-build`, so complete the build step above first.
 
-`powershell
+```powershell
 dotnet run --project .\work\NetworkDiagTool.Tests\NetworkDiagTool.Tests.csproj -c Release --no-build
-`
+```
 
 The tests cover:
 
@@ -147,17 +147,16 @@ The tests cover:
 
 To create a self-contained win-x64 package for a computer without the .NET Desktop Runtime:
 
-`powershell
+```powershell
 .\work\publish-self-contained-win-x64.ps1
-`
+```
 
 Or run:
 
-`powershell
+```powershell
 dotnet publish .\work\NetworkDiagTool\NetworkDiagTool.csproj -c Release -r win-x64 --self-contained true -o .\outputs\NetworkDiagTool_SelfContained_win-x64 /p:PublishSingleFile=false
-`
+```
 
 ## License
 
 This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
-

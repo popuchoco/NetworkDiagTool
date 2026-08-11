@@ -25,7 +25,7 @@ NetworkDiagTool 是一套 Windows Forms 桌面版網路診斷工具，提供現�
 
 ## 專案結構
 
-`text
+```text
 .
 ├─ README.md
 ├─ README_TC.md
@@ -47,7 +47,7 @@ NetworkDiagTool 是一套 Windows Forms 桌面版網路診斷工具，提供現�
    └─ NetworkDiagTool.Tests/
       ├─ NetworkDiagTool.Tests.csproj
       └─ Program.cs
-`
+```
 
 `outputs/`、`tmp/`、`bin/`、`obj/` 與 `work/package_*/` 是產出物、暫存或歷史迭代包，公開原始碼不包含這些內容。
 
@@ -64,13 +64,13 @@ NetworkDiagTool 是一套 Windows Forms 桌面版網路診斷工具，提供現�
 
 程式不會自動建立 `config.json`。第一次使用時，請複製 `config.template.json`，並將副本重新命名為 `config.json` 後再啟動程式。
 
-`json
+```json
 {
   "LogDirectory": "C:\\Temp\\NetworkDiagLogs",
   "DefaultTimeoutMs": 3000,
   "DefaultPingCount": 4
 }
-`
+```
 
 欄位說明：
 
@@ -114,23 +114,23 @@ NetworkDiagTool 是一套 Windows Forms 桌面版網路診斷工具，提供現�
 
 ## 建置
 
-`powershell
+```powershell
 dotnet build .\work\NetworkDiagTool.slnx -c Release
-`
+```
 
 Release 輸出位置：
 
-`text
+```text
 work\NetworkDiagTool\bin\Release\net10.0-windows\NetworkDiagTool.exe
-`
+```
 
 ## 測試
 
 測試指令使用 `--no-build`，因此請先完成上方 build。
 
-`powershell
+```powershell
 dotnet run --project .\work\NetworkDiagTool.Tests\NetworkDiagTool.Tests.csproj -c Release --no-build
-`
+```
 
 測試涵蓋：
 
@@ -147,17 +147,16 @@ dotnet run --project .\work\NetworkDiagTool.Tests\NetworkDiagTool.Tests.csproj -
 
 若目標主機無法安裝 .NET Desktop Runtime，可產生 self-contained win-x64 套件：
 
-`powershell
+```powershell
 .\work\publish-self-contained-win-x64.ps1
-`
+```
 
 或手動執行：
 
-`powershell
+```powershell
 dotnet publish .\work\NetworkDiagTool\NetworkDiagTool.csproj -c Release -r win-x64 --self-contained true -o .\outputs\NetworkDiagTool_SelfContained_win-x64 /p:PublishSingleFile=false
-`
+```
 
 ## 授權
 
 本專案採用 Apache License 2.0。完整授權內容請參閱 [LICENSE](LICENSE)。
-
