@@ -1,0 +1,5 @@
+{
+  "LogDirectory": "C:\\Temp\\NetworkDiagLogs",
+  "DefaultTimeoutMs": 3000,
+  "DefaultPingCount": 4
+}

@@ -1,0 +1,32 @@
+# Build outputs
+**/bin/
+**/obj/
+*.user
+*.suo
+*.cache
+
+# Runtime-local configuration and logs
+config.json
+startup-error.log
+logs/
+*.log
+
+# Generated deliverables and temporary artifacts
+outputs/
+tmp/
+
+# Historical working packages generated during iteration
+work/package_*/
+
+# Internal handoff notes
+HANDOFF.md
+
+# Local Codex metadata
+.codex/
+.agents/
+
+# OS/editor noise
+.vs/
+.vscode/
+Thumbs.db
+Desktop.ini

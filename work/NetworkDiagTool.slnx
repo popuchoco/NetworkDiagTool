@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="NetworkDiagTool/NetworkDiagTool.csproj" />
+  <Project Path="NetworkDiagTool.Tests/NetworkDiagTool.Tests.csproj" />
+</Solution>
