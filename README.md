@@ -12,6 +12,9 @@ NetworkDiagTool is a Windows Forms network diagnostic tool for checking IP/Host,
 - Full diagnostic: combines Ping, TCP, tracert, gateway Ping, DNS, Proxy, ARP, `route print`, `ipconfig`, `netstat`, and `Get-NetAdapter`.
 - System information: displays `ipconfig`, `netstat`, the routing table, and network adapter status.
 - DNS resolution: checks whether a host can be resolved to an IP address.
+- DNS query (`nslookup`): queries each configured DNS server and compares whether the returned address sets are consistent.
+- DNS fallback evidence: Full Diagnostic runs one `nslookup` query only when the target is a domain name and DNS resolution fails.
+- DNS summary: separates the configured DNS value from the actual responder; the actual responder is shown as `-` when DNS resolution succeeds without fallback evidence. Windows default IPv6 placeholder DNS entries are skipped automatically.
 - ARP lookup: runs `arp -a` to help determine whether a target remains present on the local network when Ping fails.
 - Proxy detection: runs `netsh winhttp show proxy` to display the WinHTTP Proxy configuration.
 - Diagnostic summary: full diagnostic output includes PASS/FAIL, Severity, elapsed-time statistics, Network Health score, and a summary.

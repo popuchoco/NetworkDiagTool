@@ -36,6 +36,7 @@ public sealed class MainForm : Form
         string Ipv4,
         string Gateway,
         string Dns,
+        string DnsResponder,
         string Proxy);
 
     private sealed record ArpCorrelation(
@@ -197,6 +198,8 @@ public sealed class MainForm : Form
         systemButtons.Controls.Add(CreateDashboardButton("路由表", async (_, _) => await RunAsync("route_table", "路由表", (log, token) => _diagnosticService.RunRouteTableAsync(log, token))));
         systemButtons.Controls.Add(CreateDashboardButton("網卡狀態", async (_, _) => await RunAsync("get_netadapter", "網卡狀態", (log, token) => _diagnosticService.RunGetNetAdapterAsync(log, token))));
         systemButtons.Controls.Add(CreateDashboardButton("DNS 解析", async (_, _) => await RunAsync("dns_resolve", "DNS Resolve", (log, token) => _diagnosticService.RunDnsResolveAsync(Host, log, token))));
+        systemButtons.Controls.Add(CreateDashboardButton("DNS 查詢 (nslookup)", async (_, _) => await RunStepsAsync("dns_nslookup",
+            [new DiagnosticStep("dns_nslookup", "DNS 查詢 (nslookup)", "nslookup", (log, token) => _diagnosticService.RunNslookupAllConfiguredServersAsync(Host, log, token))])));
         systemButtons.Controls.Add(CreateDashboardButton("地址解析", async (_, _) => await RunAsync("arp_table", "地址解析", (log, token) => _diagnosticService.RunArpTableAsync(log, token))));
         systemButtons.Controls.Add(CreateDashboardButton("Proxy 偵測", async (_, _) => await RunAsync("proxy_detect", "Proxy 偵測", (log, token) => _diagnosticService.RunWinHttpProxyAsync(log, token))));
 
@@ -717,7 +720,7 @@ public sealed class MainForm : Form
         return
         [
             new("ping", $"Ping (完整診斷最多 {FullDiagnosticMaxPingCount} 次)", "Ping", (log, token) => _diagnosticService.RunPingAsync(Host, FullDiagnosticPingCount, TimeoutMs, log, token)),
-            new("dns_resolve", "DNS Resolve", "DNS", (log, token) => _diagnosticService.RunDnsResolveAsync(Host, log, token)),
+            new("dns_resolve", "DNS Resolve", "DNS", (log, token) => _diagnosticService.RunDnsResolveWithFallbackAsync(Host, log, token)),
             new("tnc_tcp", "TNC / TCP", $"TCP {Port}", (log, token) => _diagnosticService.RunTcpConnectAsync(Host, Port, TimeoutMs, log, token)),
             new("gateway_ping", "自動 Gateway Ping", "Gateway", (log, token) => _diagnosticService.RunGatewayPingAsync(TimeoutMs, log, token)),
             new("proxy_detect", "Proxy 偵測", "Proxy", (log, token) => _diagnosticService.RunWinHttpProxyAsync(log, token)),
@@ -735,6 +738,7 @@ public sealed class MainForm : Form
         {
             "ping" => AnalyzePing(step, lines, elapsedMs, timeoutMs),
             "dns_resolve" => AnalyzeDnsResolve(step, lines, elapsedMs),
+            "dns_nslookup" => AnalyzeNslookup(step, lines, elapsedMs),
             "tnc_tcp" => AnalyzeTcp(step, lines, elapsedMs),
             "gateway_ping" => AnalyzeGateway(step, lines, elapsedMs),
             "proxy_detect" => AnalyzeCommandLike(step, lines, elapsedMs, "Low", "Proxy command completed."),
@@ -789,6 +793,236 @@ public sealed class MainForm : Form
         return lines.Any(ContainsAny("[DNS Resolve]", "成功")) || lines.Any(ContainsAny("[DNS Resolve]", "PASS"))
             ? Pass(step, elapsedMs, "Resolved")
             : Fail(step, elapsedMs, "High", "DNS Resolve did not complete.");
+    }
+
+    private static StepReport AnalyzeNslookup(DiagnosticStep step, IReadOnlyList<string> lines, long elapsedMs)
+    {
+        if (lines.Any(line => line.Contains(DiagnosticService.OnlyWindowsDefaultIpv6DnsMessage, StringComparison.Ordinal)))
+        {
+            return Fail(step, elapsedMs, "High", "No queryable DNS server configured");
+        }
+
+        if (TryGetNslookupComparison(lines, out var serverCount, out var resolvedCount))
+        {
+            return AnalyzeMultiNslookup(step, lines, elapsedMs, serverCount, resolvedCount);
+        }
+
+        if (lines.Any(line => TrimNslookupPrefix(line).Contains("找不到任何已設定的 DNS 伺服器", StringComparison.OrdinalIgnoreCase)))
+        {
+            return Fail(step, elapsedMs, "High", "No DNS server configured");
+        }
+
+        if (lines.Any(line => line.Contains("超過 12 秒未完成", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Timed out after 12s", StringComparison.OrdinalIgnoreCase)))
+        {
+            return Fail(step, elapsedMs, "High", "Timed out after 12s");
+        }
+
+        if (lines.Any(line => line.Contains("Non-existent domain", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("找不到", StringComparison.OrdinalIgnoreCase)))
+        {
+            return Fail(step, elapsedMs, "High", "NXDOMAIN");
+        }
+
+        if (lines.Any(line => line.Contains("要求逾時", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("timed-out", StringComparison.OrdinalIgnoreCase)))
+        {
+            return Fail(step, elapsedMs, "High", "DNS server did not respond");
+        }
+
+        if (lines.Any(line => line.Contains("Server failed", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("伺服器失敗", StringComparison.OrdinalIgnoreCase)))
+        {
+            return Fail(step, elapsedMs, "High", "SERVFAIL");
+        }
+
+        return HasNslookupAnswerAddress(lines)
+            ? Pass(step, elapsedMs, $"Resolved by {GetNslookupServer(lines)}")
+            : Fail(step, elapsedMs, "High", "nslookup result could not be determined.");
+    }
+
+    private static StepReport AnalyzeMultiNslookup(
+        DiagnosticStep step,
+        IReadOnlyList<string> lines,
+        long elapsedMs,
+        int serverCount,
+        int resolvedCount)
+    {
+        if (serverCount <= 0)
+        {
+            return Fail(step, elapsedMs, "High", "No DNS server configured");
+        }
+
+        if (resolvedCount <= 0)
+        {
+            return Fail(step, elapsedMs, "High", $"0/{serverCount} servers resolved");
+        }
+
+        var answerSets = GetNslookupServerAnswerSets(lines);
+        var answersDiffer = lines.Any(line => TrimNslookupPrefix(line).Contains("位址不一致", StringComparison.OrdinalIgnoreCase));
+        if (!answersDiffer && answerSets.Count >= 2)
+        {
+            answersDiffer = answerSets.Skip(1).Any(addresses => !answerSets[0].SetEquals(addresses));
+        }
+
+        return answersDiffer
+            ? new StepReport(step.Category, step.DisplayName, step.ReportName, true, "Warning", elapsedMs, $"{resolvedCount}/{serverCount} resolved; answers differ")
+            : Pass(step, elapsedMs, $"{resolvedCount}/{serverCount} servers resolved");
+    }
+
+    private static bool TryGetNslookupComparison(IReadOnlyList<string> lines, out int serverCount, out int resolvedCount)
+    {
+        foreach (var line in lines)
+        {
+            var normalizedLine = TrimNslookupPrefix(line);
+            var match = Regex.Match(
+                normalizedLine,
+                @"^比對:\s*共\s*(\d+)\s*台，\s*(\d+)\s*台解析成功。?$",
+                RegexOptions.IgnoreCase);
+            if (match.Success
+                && int.TryParse(match.Groups[1].Value, out serverCount)
+                && int.TryParse(match.Groups[2].Value, out resolvedCount))
+            {
+                return true;
+            }
+        }
+
+        serverCount = 0;
+        resolvedCount = 0;
+        return false;
+    }
+
+    private static List<HashSet<string>> GetNslookupServerAnswerSets(IReadOnlyList<string> lines)
+    {
+        var answerSets = new List<HashSet<string>>();
+        List<string>? currentServerLines = null;
+
+        foreach (var line in lines)
+        {
+            var normalizedLine = TrimNslookupPrefix(line);
+            if (normalizedLine.StartsWith("===== 查詢 DNS 伺服器:", StringComparison.OrdinalIgnoreCase))
+            {
+                AddNslookupServerAnswerSet(currentServerLines, answerSets);
+                currentServerLines = new List<string>();
+                continue;
+            }
+
+            if (normalizedLine.StartsWith("比對:", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            currentServerLines?.Add(line);
+        }
+
+        AddNslookupServerAnswerSet(currentServerLines, answerSets);
+        return answerSets;
+    }
+
+    private static void AddNslookupServerAnswerSet(List<string>? lines, ICollection<HashSet<string>> answerSets)
+    {
+        if (lines is null)
+        {
+            return;
+        }
+
+        var addresses = GetNslookupAnswerAddresses(lines);
+        if (addresses.Count > 0)
+        {
+            answerSets.Add(addresses);
+        }
+    }
+
+    private static bool HasNslookupAnswerAddress(IReadOnlyList<string> lines)
+    {
+        return GetNslookupAnswerAddresses(lines).Count > 0;
+    }
+
+    private static HashSet<string> GetNslookupAnswerAddresses(IEnumerable<string> lines)
+    {
+        var addresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var answerStarted = false;
+        var addressLineStarted = false;
+
+        foreach (var line in lines)
+        {
+            var normalizedLine = TrimNslookupPrefix(line);
+            if (TryGetNslookupValue(normalizedLine, out _, "名稱:", "Name:"))
+            {
+                answerStarted = true;
+                addressLineStarted = false;
+                continue;
+            }
+
+            if (!answerStarted)
+            {
+                continue;
+            }
+
+            if (TryGetNslookupValue(normalizedLine, out var addressValue, "Addresses:", "Address:"))
+            {
+                addressLineStarted = true;
+                AddNslookupAddresses(addressValue, addresses);
+                continue;
+            }
+
+            if (addressLineStarted)
+            {
+                AddNslookupAddresses(normalizedLine, addresses);
+            }
+        }
+
+        return addresses;
+    }
+
+    private static void AddNslookupAddresses(string value, ICollection<string> addresses)
+    {
+        foreach (var token in value.Split([' ', '\t', ','], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (IPAddress.TryParse(token.Trim(), out var address))
+            {
+                addresses.Add(address.ToString());
+            }
+        }
+    }
+
+    private static string GetNslookupServer(IEnumerable<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            var normalizedLine = TrimNslookupPrefix(line);
+            if (TryGetNslookupValue(normalizedLine, out var value, "回答的伺服器:", "伺服器:", "Server:")
+                && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return "unknown";
+    }
+
+    private static string TrimNslookupPrefix(string line)
+    {
+        var trimmed = line.TrimStart();
+        return trimmed.StartsWith("[nslookup]", StringComparison.OrdinalIgnoreCase)
+            ? trimmed["[nslookup]".Length..].TrimStart()
+            : trimmed;
+    }
+
+    private static bool TryGetNslookupValue(string line, out string value, params string[] labels)
+    {
+        foreach (var label in labels)
+        {
+            if (line.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+            {
+                value = line[label.Length..].Trim();
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
     }
 
     private static StepReport AnalyzeTcp(DiagnosticStep step, IReadOnlyList<string> lines, long elapsedMs)
@@ -980,7 +1214,8 @@ public sealed class MainForm : Form
         writeLine($"Network Adapter  : {snapshot.AdapterName}");
         writeLine($"IPv4             : {snapshot.Ipv4}");
         writeLine($"Gateway          : {snapshot.Gateway,-18} {StatusMark(gatewayReport)}");
-        writeLine($"DNS              : {snapshot.Dns,-18} {StatusMark(dnsReport)}");
+        writeLine($"DNS (設定值)     : {snapshot.Dns,-18} {StatusMark(dnsReport)}");
+        writeLine($"DNS (實際回答)   : {snapshot.DnsResponder}");
         writeLine($"Proxy            : {snapshot.Proxy,-18} {StatusMark(proxyReport)}");
         writeLine($"Ping             : {pingReport?.Detail ?? "N/A",-18} {StatusMark(pingReport)}");
         writeLine($"TCP              : {TcpSummary(tcpReport),-18} {StatusMark(tcpReport)}");
@@ -1031,7 +1266,29 @@ public sealed class MainForm : Form
             adapter?.Ipv4 ?? "N/A",
             adapter?.Gateway ?? "N/A",
             adapter?.Dns ?? "N/A",
+            GetDnsResponder(lines),
             DetectProxySummary(lines));
+    }
+
+    private static string GetDnsResponder(IEnumerable<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.TrimStart();
+            if (!trimmedLine.StartsWith("[nslookup]", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var normalizedLine = TrimNslookupPrefix(trimmedLine);
+            if (TryGetNslookupValue(normalizedLine, out var value, "回答的伺服器:")
+                && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return "-";
     }
 
     private static string DetectProxySummary(IEnumerable<string> lines)

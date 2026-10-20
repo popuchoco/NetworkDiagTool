@@ -12,6 +12,9 @@ NetworkDiagTool 是一套 Windows Forms 桌面版網路診斷工具，提供現�
 - 完整診斷：整合 Ping、TCP、tracert、Gateway Ping、DNS、Proxy、ARP、route print、ipconfig、netstat 與 Get-NetAdapter。
 - 系統資訊：查看 ipconfig、netstat、路由表與網卡狀態。
 - DNS 解析：確認 host 是否能解析成 IP。
+- DNS 查詢（`nslookup`）：對本機每一台已設定的 DNS 伺服器各查詢一次，並比對各台回傳的位址集合是否一致。
+- DNS 佐證：完整診斷只在目標是網域名稱且 DNS 解析失敗時，追加一次 `nslookup` 作為佐證。
+- DNS Summary：將 DNS 拆成「設定值」與「實際回答」兩列；DNS 正常且未觸發 fallback 時，「實際回答」顯示 `-`，並自動略過 Windows 預設的 IPv6 佔位 DNS 位址（`fec0:0:0:ffff::1~3`）。
 - 地址解析：執行 `arp -a`，輔助判斷 Ping 失敗時目標是否仍存在於同一區網。
 - Proxy 偵測：執行 `netsh winhttp show proxy`，顯示 WinHTTP Proxy 設定。
 - 結果總結：完整診斷會輸出 PASS/FAIL、Severity、耗時統計、Network Health 分數與 Summary。
